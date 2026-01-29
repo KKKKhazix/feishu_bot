@@ -1,0 +1,1 @@
+"""Feishu calendar bot package."""
