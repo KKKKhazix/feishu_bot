@@ -159,7 +159,9 @@ class VolcanoAI:
             logger.error(f"Failed to parse vision model response as JSON: {e}, content was: {content[:200] if 'content' in dir() else 'N/A'}")
             return {"has_schedule": False, "reason": "模型响应格式错误"}
         except Exception as e:
-            logger.error(f"Vision schedule extraction failed: {e}")
+            import traceback
+            logger.error(f"Vision schedule extraction failed: {type(e).__name__}: {e}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return {"has_schedule": False, "reason": f"提取失败: {str(e)}"}
     
     def ocr_image(self, image_bytes: bytes) -> Optional[str]:
