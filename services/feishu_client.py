@@ -2,7 +2,7 @@
 import json
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Tuple
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 import lark_oapi as lark
 from lark_oapi.api.im.v1 import *
 from lark_oapi.api.calendar.v4 import *
@@ -150,15 +150,31 @@ class FeishuClient:
         else:
             end_time_aware = end_time
         
-        # 转换为UTC时间戳（秒）
+        # 转换为UTC时间戳（秒/毫秒）
         start_ts = int(start_time_aware.timestamp())
         end_ts = int(end_time_aware.timestamp())
+        start_ts_ms = int(start_time_aware.timestamp() * 1000)
+        end_ts_ms = int(end_time_aware.timestamp() * 1000)
         
         logger.debug(f"Calendar link timestamps: start={start_ts}, end={end_ts}")
         
-        calendar_url = f"https://applink.feishu.cn/client/calendar/event/create?start_time={start_ts}&end_time={end_ts}&summary={quote(title)}"
+        params = [
+            ("start_time", str(start_ts)),
+            ("end_time", str(end_ts)),
+            ("startTime", str(start_ts_ms)),
+            ("endTime", str(end_ts_ms)),
+            ("summary", title),
+            ("title", title),
+        ]
+
         if location:
-            calendar_url += f"&location={quote(location)}"
+            params.extend([
+                ("location", location),
+                ("address", location),
+            ])
+
+        query = urlencode(params, quote_via=quote)
+        calendar_url = f"https://applink.feishu.cn/client/calendar/event/create?{query}"
         
         # 格式化时间显示
         start_str = start_time.strftime('%Y-%m-%d %H:%M')
