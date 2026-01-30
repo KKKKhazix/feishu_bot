@@ -17,7 +17,7 @@ class TextHandler:
         self.feishu = feishu_client
         self.llm = doubao_llm
     
-    async def handle(self, event: Dict[str, Any]) -> None:
+    def handle(self, event: Dict[str, Any]) -> None:
         """处理文字消息
         
         Args:
@@ -75,13 +75,15 @@ class TextHandler:
             )
             
             if success:
-                location_text = f"\n📍 地点: {location}" if location else ""
-                self.feishu.reply_message(
-                    message_id,
-                    f"✅ 日程创建成功！\n\n"
-                    f"📅 {title}\n"
-                    f"🕐 {start_dt.strftime('%Y-%m-%d %H:%M')} - {end_dt.strftime('%H:%M')}"
-                    f"{location_text}"
+                location_text = location if location else None
+                # 使用卡片回复
+                self.feishu.reply_card(
+                    message_id=message_id,
+                    title=title,
+                    content="从文字消息中识别并创建",
+                    start_time=start_dt.strftime('%Y-%m-%d %H:%M'),
+                    end_time=end_dt.strftime('%H:%M'),
+                    location=location_text
                 )
             else:
                 self.feishu.reply_message(message_id, f"❌ 创建日程失败: {result}")

@@ -1,5 +1,4 @@
 """飞书日程机器人 - 主入口"""
-import asyncio
 import json
 from typing import Optional
 import lark_oapi as lark
@@ -87,13 +86,13 @@ def handle_message_event(data: P2ImMessageReceiveV1):
             }
         }
         
-        # 根据消息类型路由到对应处理器
+        # 根据消息类型路由到对应处理器（同步调用）
         if message_type == "text" and text_handler:
-            asyncio.run(text_handler.handle(event_dict))
+            text_handler.handle(event_dict)
         elif message_type == "image" and image_handler:
-            asyncio.run(image_handler.handle(event_dict))
+            image_handler.handle(event_dict)
         elif message_type == "audio" and voice_handler:
-            asyncio.run(voice_handler.handle(event_dict))
+            voice_handler.handle(event_dict)
         else:
             logger.warning(f"Unsupported message type: {message_type}")
             # 回复用户提示不支持的消息类型

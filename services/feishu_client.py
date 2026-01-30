@@ -157,3 +157,88 @@ class FeishuClient:
             return False, response.msg
             
         return True, response.data.event.event_id
+    
+    def reply_card(self, message_id: str, title: str, content: str, 
+                   start_time: str, end_time: str, location: str = None) -> bool:
+        """回复卡片消息（日程创建成功通知）
+        
+        Args:
+            message_id: 要回复的消息ID
+            title: 日程标题
+            content: 卡片副标题/描述
+            start_time: 开始时间字符串
+            end_time: 结束时间字符串
+            location: 地点（可选）
+            
+        Returns:
+            是否发送成功
+        """
+        # 构建飞书卡片
+        elements = [
+            {
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": f"**📅 {title}**"
+                }
+            },
+            {
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": f"🕐 **时间**: {start_time} - {end_time}"
+                }
+            }
+        ]
+        
+        # 如果有地点，添加地点信息
+        if location:
+            elements.append({
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": f"📍 **地点**: {location}"
+                }
+            })
+        
+        # 添加分割线和提示
+        elements.append({"tag": "hr"})
+        elements.append({
+            "tag": "note",
+            "elements": [
+                {
+                    "tag": "plain_text",
+                    "content": "日程已同步到您的飞书日历"
+                }
+            ]
+        })
+        
+        card = {
+            "config": {
+                "wide_screen_mode": True
+            },
+            "header": {
+                "template": "green",
+                "title": {
+                    "tag": "plain_text",
+                    "content": "✅ 日程创建成功"
+                }
+            },
+            "elements": elements
+        }
+        
+        request = ReplyMessageRequest.builder() \
+            .message_id(message_id) \
+            .request_body(ReplyMessageRequestBody.builder() \
+                .msg_type("interactive") \
+                .content(json.dumps(card)) \
+                .build()) \
+            .build()
+            
+        response = self.client.im.v1.message.reply(request)
+        
+        if not response.success():
+            logger.error(f"Reply card failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}")
+            return False
+            
+        return True

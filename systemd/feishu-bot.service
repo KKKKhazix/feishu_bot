@@ -1,1 +1,19 @@
-"""Placeholder - to be implemented"""
+[Unit]
+Description=Feishu Calendar Bot - 飞书日程机器人
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/feishu_bot
+ExecStart=/root/feishu_bot/.venv/bin/python main.py
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+# 日志
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
