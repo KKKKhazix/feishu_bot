@@ -22,6 +22,8 @@ class ImageHandler:
     def handle(self, event: Dict[str, Any]) -> None:
         """处理图片消息
         
+        使用合并的 Vision + 日程提取，一步到位，速度更快。
+        
         Args:
             event: 飞书消息事件
         """
@@ -47,20 +49,12 @@ class ImageHandler:
                 self.feishu.reply_message(message_id, "❌ 无法下载图片，请重新发送")
                 return
             
-            # OCR识别
-            ocr_text = self.volcano.ocr_image(image_bytes)
-            if not ocr_text:
-                self.feishu.reply_message(message_id, "❌ 无法识别图片中的文字，请发送更清晰的截图")
-                return
-            
-            logger.info(f"OCR result: {ocr_text[:100]}...")
-            
-            # 提取日程
-            schedule = self.llm.extract_schedule(ocr_text)
+            # 一步到位：Vision 模型直接从图片提取日程信息（比 OCR + LLM 更快）
+            schedule = self.volcano.extract_schedule_from_image(image_bytes)
             
             if not schedule.get("has_schedule"):
                 reason = schedule.get("reason", "图片中未找到日程信息")
-                self.feishu.reply_message(message_id, f"❌ {reason}\n\n识别到的文字:\n{ocr_text[:200]}...")
+                self.feishu.reply_message(message_id, f"❌ {reason}\n\n请发送包含日程信息的截图（如聊天记录）")
                 return
             
             # 解析日期时间
