@@ -401,11 +401,58 @@ class FeishuClient:
             
             event_id = response.data.event.event_id if response.data and response.data.event else None
             logger.info(f"Calendar event created successfully: {title}, event_id: {event_id}")
+            
+            # 创建成功后，将用户添加为日程参与人
+            # 这样日程才会出现在用户的日历中
+            if event_id and user_open_id:
+                self._add_event_attendee(calendar_id, event_id, user_open_id)
+            
             return (True, event_id)
             
         except Exception as e:
             logger.error(f"Create calendar event error: {e}", exc_info=True)
             return (False, str(e))
+
+    def _add_event_attendee(self, calendar_id: str, event_id: str, user_open_id: str) -> bool:
+        """将用户添加为日程参与人
+        
+        Args:
+            calendar_id: 日历ID
+            event_id: 日程ID
+            user_open_id: 用户的 open_id
+            
+        Returns:
+            是否成功
+        """
+        try:
+            # 构建参与人
+            attendee = CalendarEventAttendee.builder() \
+                .type("user") \
+                .user_id(user_open_id) \
+                .build()
+            
+            request = CreateCalendarEventAttendeeRequest.builder() \
+                .calendar_id(calendar_id) \
+                .event_id(event_id) \
+                .user_id_type("open_id") \
+                .request_body(CreateCalendarEventAttendeeRequestBody.builder()
+                    .attendees([attendee])
+                    .need_notification(True)  # 给用户发通知
+                    .build()) \
+                .build()
+            
+            response = self.client.calendar.v4.calendar_event_attendee.create(request)
+            
+            if not response.success():
+                logger.error(f"Add attendee failed: {response.code}, {response.msg}")
+                return False
+            
+            logger.info(f"Added user {user_open_id} as attendee to event {event_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Add attendee error: {e}", exc_info=True)
+            return False
 
     def reply_schedule_created_card(
         self, 
