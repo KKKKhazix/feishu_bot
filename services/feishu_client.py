@@ -167,12 +167,15 @@ class FeishuClient:
             ("summary", title),
         ]
 
-        # 地点信息：放到描述里（飞书AppLink的location参数不一定生效）
-        # 尝试多种可能的参数名
+        # 地点信息：尝试多种参数格式（优先地点字段，备选描述字段）
+        # 根据飞书SDK分析，location可能需要用点号分隔格式
         if location:
-            desc_text = f"📍 地点: {location}"
-            params.append(("description", desc_text))  # 标准参数名
-            params.append(("desc", desc_text))          # 简写参数名
+            # 方案1：点号分隔格式（最可能生效）
+            params.append(("location.name", location))
+            # 方案2：简单字符串格式（备选）
+            params.append(("location", location))
+            # 方案3：描述字段兜底（确保地点信息不丢失）
+            params.append(("description", f"📍 地点: {location}"))
 
         query = urlencode(params, quote_via=quote)
         calendar_url = f"https://applink.feishu.cn/client/calendar/event/create?{query}"
