@@ -438,7 +438,7 @@ class FeishuClient:
                 .user_id_type("open_id") \
                 .request_body(CreateCalendarEventAttendeeRequestBody.builder()
                     .attendees([attendee])
-                    .need_notification(True)  # 给用户发通知
+                    .need_notification(False)  # 不发通知，避免重复（创建日程时已通知）
                     .build()) \
                 .build()
             
@@ -516,25 +516,8 @@ class FeishuClient:
         # 添加分割线
         elements.append({"tag": "hr"})
         
-        # 如果有日程详情，添加「查看详情」按钮
-        if calendar_id and event_id:
-            # 飞书 AppLink 日程详情页
-            # 格式: https://applink.feishu.cn/client/calendar/event/detail?calendarId=xxx&key=xxx
-            detail_url = f"https://applink.feishu.cn/client/calendar/event/detail?calendarId={quote(calendar_id)}&key={quote(event_id)}"
-            elements.append({
-                "tag": "action",
-                "actions": [
-                    {
-                        "tag": "button",
-                        "text": {
-                            "tag": "plain_text",
-                            "content": "📅 查看日程详情"
-                        },
-                        "type": "primary",
-                        "url": detail_url
-                    }
-                ]
-            })
+        # 注：不添加「查看详情」按钮，因为 AppLink 对应用日历的日程无法正常打开
+        # 用户可以从「日历助手」的通知中直接进入日程详情
         
         # 添加提示
         elements.append({
