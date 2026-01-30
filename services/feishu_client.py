@@ -160,15 +160,17 @@ class FeishuClient:
         # 飞书 AppLink 参数：
         # - startTime/endTime: 秒级时间戳（驼峰命名，iOS客户端用这个）
         # - summary: 标题
-        # - location: 地点
+        # - description: 描述（用于放地点信息，因为location参数可能不被支持）
         params = [
             ("startTime", str(start_ts)),
             ("endTime", str(end_ts)),
             ("summary", title),
         ]
 
+        # 地点信息：尝试用 location 和 description 双保险
         if location:
             params.append(("location", location))
+            params.append(("description", f"地点: {location}"))
 
         query = urlencode(params, quote_via=quote)
         calendar_url = f"https://applink.feishu.cn/client/calendar/event/create?{query}"
