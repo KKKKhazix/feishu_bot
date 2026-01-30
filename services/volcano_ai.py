@@ -32,7 +32,7 @@ VISION_SCHEDULE_PROMPT = """你是一个专业的日程信息提取助手。请�
 
 ## 输出格式（必须是JSON）：
 ```json
-{
+{{
   "has_schedule": true,
   "title": "与XXX做什么",
   "date": "YYYY-MM-DD",
@@ -41,15 +41,15 @@ VISION_SCHEDULE_PROMPT = """你是一个专业的日程信息提取助手。请�
   "location": "地点（没有则为null）",
   "participants": ["人名1", "人名2"],
   "confidence": 0.0-1.0
-}
+}}
 ```
 
 如果图片中没有日程信息，返回：
 ```json
-{
+{{
   "has_schedule": false,
   "reason": "原因"
-}
+}}
 ```
 
 今天是 {today}。请直接返回JSON，不要有其他内容。"""
