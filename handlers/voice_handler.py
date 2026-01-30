@@ -88,7 +88,7 @@ class VoiceHandler:
             user_open_id = sender_id.get("open_id", "")
             
             # 使用 API 创建日程
-            success, result = self.feishu.create_calendar_event(
+            success, calendar_id, event_id = self.feishu.create_calendar_event(
                 user_open_id=user_open_id,
                 title=title,
                 start_time=start_dt,
@@ -97,18 +97,20 @@ class VoiceHandler:
             )
             
             if success:
-                # 发送成功通知卡片
+                # 发送成功通知卡片（带查看详情按钮）
                 self.feishu.reply_schedule_created_card(
                     message_id=message_id,
                     title=title,
                     start_time=start_dt,
                     end_time=end_dt,
                     location=location,
-                    source="语音"
+                    source="语音",
+                    calendar_id=calendar_id,
+                    event_id=event_id
                 )
             else:
                 # 创建失败，降级为发送带按钮的卡片让用户手动添加
-                logger.warning(f"API create failed: {result}, falling back to AppLink")
+                logger.warning(f"API create failed: {event_id}, falling back to AppLink")
                 self.feishu.reply_schedule_card(
                     message_id=message_id,
                     title=title,

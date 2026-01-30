@@ -407,11 +407,12 @@ class FeishuClient:
             if event_id and user_open_id:
                 self._add_event_attendee(calendar_id, event_id, user_open_id)
             
-            return (True, event_id)
+            # 返回 (成功, calendar_id, event_id) 用于生成详情链接
+            return (True, calendar_id, event_id)
             
         except Exception as e:
             logger.error(f"Create calendar event error: {e}", exc_info=True)
-            return (False, str(e))
+            return (False, None, str(e))
 
     def _add_event_attendee(self, calendar_id: str, event_id: str, user_open_id: str) -> bool:
         """将用户添加为日程参与人
@@ -461,7 +462,9 @@ class FeishuClient:
         start_time: datetime,
         end_time: datetime,
         location: Optional[str] = None,
-        source: str = "消息"
+        source: str = "消息",
+        calendar_id: Optional[str] = None,
+        event_id: Optional[str] = None
     ) -> bool:
         """回复日程创建成功的卡片
         
@@ -472,6 +475,8 @@ class FeishuClient:
             end_time: 结束时间
             location: 地点（可选）
             source: 来源描述（如"图片"、"文字"）
+            calendar_id: 日历ID（用于生成详情链接）
+            event_id: 日程ID（用于生成详情链接）
             
         Returns:
             是否发送成功
@@ -506,6 +511,29 @@ class FeishuClient:
                     "tag": "lark_md",
                     "content": f"📍 **地点**: {location}"
                 }
+            })
+        
+        # 添加分割线
+        elements.append({"tag": "hr"})
+        
+        # 如果有日程详情，添加「查看详情」按钮
+        if calendar_id and event_id:
+            # 飞书 AppLink 日程详情页
+            # 格式: https://applink.feishu.cn/client/calendar/event/detail?calendarId=xxx&key=xxx
+            detail_url = f"https://applink.feishu.cn/client/calendar/event/detail?calendarId={quote(calendar_id)}&key={quote(event_id)}"
+            elements.append({
+                "tag": "action",
+                "actions": [
+                    {
+                        "tag": "button",
+                        "text": {
+                            "tag": "plain_text",
+                            "content": "📅 查看日程详情"
+                        },
+                        "type": "primary",
+                        "url": detail_url
+                    }
+                ]
             })
         
         # 添加提示
