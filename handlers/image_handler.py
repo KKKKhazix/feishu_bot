@@ -29,8 +29,6 @@ class ImageHandler:
         try:
             message = event.get("message", {})
             message_id = message.get("message_id", "")
-            sender = event.get("sender", {})
-            sender_id = sender.get("sender_id", {}).get("open_id", "")
             
             # 提取图片 key
             content = message.get("content", "{}")
@@ -78,28 +76,15 @@ class ImageHandler:
             else:
                 end_dt = start_dt + timedelta(hours=1)
             
-            # 创建日历事件
-            success, result = self.feishu.create_calendar_event(
-                user_id=sender_id,
-                summary=title,
+            # 发送日程卡片（带「添加到日历」按钮）
+            self.feishu.reply_schedule_card(
+                message_id=message_id,
+                title=title,
                 start_time=start_dt,
                 end_time=end_dt,
-                location=location
+                location=location,
+                source="图片"
             )
-            
-            if success:
-                location_text = location if location else None
-                # 使用卡片回复
-                self.feishu.reply_card(
-                    message_id=message_id,
-                    title=title,
-                    content="从图片中识别并创建",
-                    start_time=start_dt.strftime('%Y-%m-%d %H:%M'),
-                    end_time=end_dt.strftime('%H:%M'),
-                    location=location_text
-                )
-            else:
-                self.feishu.reply_message(message_id, f"❌ 创建日程失败: {result}")
                 
         except Exception as e:
             logger.error(f"Image handler error: {e}", exc_info=True)

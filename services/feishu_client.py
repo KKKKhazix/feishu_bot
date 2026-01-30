@@ -2,6 +2,7 @@
 import json
 from datetime import datetime
 from typing import Optional, Tuple
+from urllib.parse import quote
 import lark_oapi as lark
 from lark_oapi.api.im.v1 import *
 from lark_oapi.api.calendar.v4 import *
@@ -109,71 +110,42 @@ class FeishuClient:
             
         return response.file.read()
     
-    def create_calendar_event(
-        self,
-        user_id: str,
-        summary: str,
+    def reply_schedule_card(
+        self, 
+        message_id: str, 
+        title: str, 
         start_time: datetime,
         end_time: datetime,
         location: Optional[str] = None,
-        description: Optional[str] = None
-    ) -> Tuple[bool, Optional[str]]:
-        """在用户日历上创建事件
-        
-        Args:
-            user_id: 用户的 open_id
-            summary: 事件标题
-            start_time: 开始时间
-            end_time: 结束时间
-            location: 地点（可选）
-            description: 描述（可选）
-            
-        Returns:
-            (是否成功, 事件ID或错误信息)
-        """
-        start_time_str = str(int(start_time.timestamp()))
-        end_time_str = str(int(end_time.timestamp()))
-        
-        event = CalendarEvent.builder() \
-            .summary(summary) \
-            .description(description or "") \
-            .start_time(TimeInfo.builder().timestamp(start_time_str).timezone("Asia/Shanghai").build()) \
-            .end_time(TimeInfo.builder().timestamp(end_time_str).timezone("Asia/Shanghai").build()) \
-            .build()
-            
-        if location:
-            event.location = EventLocation.builder().name(location).build()
-            
-        request = CreateCalendarEventRequest.builder() \
-            .calendar_id("primary") \
-            .user_id_type("open_id") \
-            .request_body(event) \
-            .build()
-            
-        response = self.client.calendar.v4.calendar_event.create(request)
-        
-        if not response.success():
-            logger.error(f"Create calendar event failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}")
-            return False, response.msg
-            
-        return True, response.data.event.event_id
-    
-    def reply_card(self, message_id: str, title: str, content: str, 
-                   start_time: str, end_time: str, location: str = None) -> bool:
-        """回复卡片消息（日程创建成功通知）
+        source: str = "消息"
+    ) -> bool:
+        """回复日程卡片，包含「添加到日历」按钮
         
         Args:
             message_id: 要回复的消息ID
             title: 日程标题
-            content: 卡片副标题/描述
-            start_time: 开始时间字符串
-            end_time: 结束时间字符串
+            start_time: 开始时间
+            end_time: 结束时间
             location: 地点（可选）
+            source: 来源描述（如"图片"、"文字"）
             
         Returns:
             是否发送成功
         """
-        # 构建飞书卡片
+        # 构建飞书日程创建链接
+        # URL格式: https://applink.feishu.cn/client/calendar/event/create?start_time=时间戳&end_time=时间戳&summary=标题
+        start_ts = int(start_time.timestamp())
+        end_ts = int(end_time.timestamp())
+        
+        calendar_url = f"https://applink.feishu.cn/client/calendar/event/create?start_time={start_ts}&end_time={end_ts}&summary={quote(title)}"
+        if location:
+            calendar_url += f"&location={quote(location)}"
+        
+        # 格式化时间显示
+        start_str = start_time.strftime('%Y-%m-%d %H:%M')
+        end_str = end_time.strftime('%H:%M')
+        
+        # 构建卡片元素
         elements = [
             {
                 "tag": "div",
@@ -186,7 +158,7 @@ class FeishuClient:
                 "tag": "div",
                 "text": {
                     "tag": "lark_md",
-                    "content": f"🕐 **时间**: {start_time} - {end_time}"
+                    "content": f"🕐 **时间**: {start_str} - {end_str}"
                 }
             }
         ]
@@ -201,14 +173,32 @@ class FeishuClient:
                 }
             })
         
-        # 添加分割线和提示
+        # 添加分割线
         elements.append({"tag": "hr"})
+        
+        # 添加「添加到日历」按钮
+        elements.append({
+            "tag": "action",
+            "actions": [
+                {
+                    "tag": "button",
+                    "text": {
+                        "tag": "plain_text",
+                        "content": "📅 添加到日历"
+                    },
+                    "type": "primary",
+                    "url": calendar_url
+                }
+            ]
+        })
+        
+        # 添加提示
         elements.append({
             "tag": "note",
             "elements": [
                 {
                     "tag": "plain_text",
-                    "content": "日程已同步到您的飞书日历"
+                    "content": f"从{source}中识别 · 点击按钮即可添加到您的日历"
                 }
             ]
         })
@@ -218,10 +208,10 @@ class FeishuClient:
                 "wide_screen_mode": True
             },
             "header": {
-                "template": "green",
+                "template": "blue",
                 "title": {
                     "tag": "plain_text",
-                    "content": "✅ 日程创建成功"
+                    "content": "📋 识别到日程信息"
                 }
             },
             "elements": elements
@@ -240,5 +230,6 @@ class FeishuClient:
         if not response.success():
             logger.error(f"Reply card failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}")
             return False
-            
+        
+        logger.info(f"Schedule card sent successfully for: {title}")
         return True
