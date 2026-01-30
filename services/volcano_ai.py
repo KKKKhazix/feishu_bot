@@ -73,8 +73,8 @@ class VolcanoAI:
             api_key=api_key,
             base_url="https://ark.cn-beijing.volces.com/api/v3"
         )
-        # 使用 vision 模型处理图片（flash 模型不支持图片）
-        self.vision_model = "doubao-1-5-vision-pro-32k-250115"
+        # 使用支持图片理解的 flash 模型
+        self.vision_model = "doubao-seed-1-6-flash-250828"
         
         # 火山引擎原生服务凭证（如果配置了的话）
         self.access_key = access_key
@@ -124,7 +124,11 @@ class VolcanoAI:
             )
             
             content = response.choices[0].message.content
-            logger.debug(f"Vision model response: {content}")
+            logger.info(f"Vision model raw response: {content[:500] if content else 'None'}")
+            
+            if not content:
+                logger.error("Vision model returned empty content")
+                return {"has_schedule": False, "reason": "模型返回空内容"}
             
             # 解析JSON - 更健壮的处理
             # 1. 去除可能存在的 markdown 代码块标记
@@ -145,12 +149,14 @@ class VolcanoAI:
             if start_idx != -1 and end_idx > start_idx:
                 content = content[start_idx:end_idx]
             
+            logger.debug(f"Cleaned JSON content: {content[:300]}")
+            
             result = json.loads(content)
             logger.info(f"Schedule extracted from image: {result}")
             return result
             
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse vision model response as JSON: {e}")
+            logger.error(f"Failed to parse vision model response as JSON: {e}, content was: {content[:200] if 'content' in dir() else 'N/A'}")
             return {"has_schedule": False, "reason": "模型响应格式错误"}
         except Exception as e:
             logger.error(f"Vision schedule extraction failed: {e}")
