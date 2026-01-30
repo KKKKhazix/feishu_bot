@@ -73,8 +73,8 @@ class VolcanoAI:
             api_key=api_key,
             base_url="https://ark.cn-beijing.volces.com/api/v3"
         )
-        # 使用 flash 模型，速度更快
-        self.vision_model = "doubao-seed-1-6-flash-250828"
+        # 使用 vision 模型处理图片（flash 模型不支持图片）
+        self.vision_model = "doubao-1-5-vision-pro-32k-250115"
         
         # 火山引擎原生服务凭证（如果配置了的话）
         self.access_key = access_key
