@@ -120,7 +120,28 @@ class VolcanoAI:
             )
             
             # 获取响应内容
-            content = response.output.content if hasattr(response, 'output') else str(response)
+            logger.info(f"Response type: {type(response)}, response: {response}")
+            
+            # 尝试不同的方式获取内容
+            if hasattr(response, 'output'):
+                output = response.output
+                logger.info(f"Output type: {type(output)}, output: {output}")
+                if isinstance(output, list) and len(output) > 0:
+                    # output 是列表，取第一个元素
+                    first_output = output[0]
+                    if hasattr(first_output, 'content'):
+                        content = first_output.content
+                    elif isinstance(first_output, dict):
+                        content = first_output.get('content', str(first_output))
+                    else:
+                        content = str(first_output)
+                elif hasattr(output, 'content'):
+                    content = output.content
+                else:
+                    content = str(output)
+            else:
+                content = str(response)
+            
             logger.info(f"Vision model raw response: {content[:500] if content else 'None'}")
             
             if not content:
