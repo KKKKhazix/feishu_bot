@@ -126,14 +126,24 @@ class VolcanoAI:
             content = response.choices[0].message.content
             logger.debug(f"Vision model response: {content}")
             
-            # 解析JSON
-            # 去除可能存在的 markdown 代码块标记
-            if content.startswith("```"):
-                first_newline = content.find('\n')
-                if first_newline != -1:
-                    content = content[first_newline:].strip()
-                if content.endswith("```"):
-                    content = content[:-3].strip()
+            # 解析JSON - 更健壮的处理
+            # 1. 去除可能存在的 markdown 代码块标记
+            if "```json" in content:
+                start = content.find("```json") + 7
+                end = content.find("```", start)
+                if end != -1:
+                    content = content[start:end].strip()
+            elif "```" in content:
+                start = content.find("```") + 3
+                end = content.find("```", start)
+                if end != -1:
+                    content = content[start:end].strip()
+            
+            # 2. 尝试找到 JSON 对象的起始和结束位置
+            start_idx = content.find("{")
+            end_idx = content.rfind("}") + 1
+            if start_idx != -1 and end_idx > start_idx:
+                content = content[start_idx:end_idx]
             
             result = json.loads(content)
             logger.info(f"Schedule extracted from image: {result}")
