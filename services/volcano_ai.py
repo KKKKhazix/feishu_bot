@@ -73,8 +73,8 @@ class VolcanoAI:
             api_key=api_key,
             base_url="https://ark.cn-beijing.volces.com/api/v3"
         )
-        # 使用非思考版视觉模型（直接输出结果，不返回推理过程）
-        self.vision_model = "doubao-1.5-pro-vision"
+        # 使用豆包1.6 lite（支持图片，可关闭深度推理）
+        self.vision_model = "doubao-seed-1-6-lite"
         
         # 火山引擎原生服务凭证（如果配置了的话）
         self.access_key = access_key
