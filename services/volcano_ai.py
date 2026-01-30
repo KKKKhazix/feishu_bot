@@ -99,31 +99,28 @@ class VolcanoAI:
             today = datetime.now().strftime("%Y年%m月%d日 %A")
             prompt = VISION_SCHEDULE_PROMPT.format(today=today)
             
-            # 使用豆包视觉模型直接提取日程
-            response = self.client.chat.completions.create(
+            # 使用官方推荐的 responses.create API
+            response = self.client.responses.create(
                 model=self.vision_model,
-                messages=[
+                input=[
                     {
                         "role": "user",
                         "content": [
                             {
-                                "type": "text",
-                                "text": prompt
+                                "type": "input_image",
+                                "image_url": f"data:image/png;base64,{image_base64}"
                             },
                             {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/png;base64,{image_base64}"
-                                }
+                                "type": "input_text",
+                                "text": prompt
                             }
                         ]
                     }
-                ],
-                max_tokens=1000,
-                temperature=0.1
+                ]
             )
             
-            content = response.choices[0].message.content
+            # 获取响应内容
+            content = response.output.content if hasattr(response, 'output') else str(response)
             logger.info(f"Vision model raw response: {content[:500] if content else 'None'}")
             
             if not content:
