@@ -120,27 +120,18 @@ class VolcanoAI:
             )
             
             # 获取响应内容
-            logger.info(f"Response type: {type(response)}, response: {response}")
-            
-            # 尝试不同的方式获取内容
-            if hasattr(response, 'output'):
-                output = response.output
-                logger.info(f"Output type: {type(output)}, output: {output}")
-                if isinstance(output, list) and len(output) > 0:
-                    # output 是列表，取第一个元素
-                    first_output = output[0]
-                    if hasattr(first_output, 'content'):
-                        content = first_output.content
-                    elif isinstance(first_output, dict):
-                        content = first_output.get('content', str(first_output))
-                    else:
-                        content = str(first_output)
-                elif hasattr(output, 'content'):
-                    content = output.content
-                else:
-                    content = str(output)
-            else:
-                content = str(response)
+            # response.output 是一个 list，包含 reasoning 和 message
+            # 我们需要找到 type='message' 的元素，取其 content[0].text
+            content = None
+            if hasattr(response, 'output') and isinstance(response.output, list):
+                for item in response.output:
+                    # 找到 message 类型的输出
+                    if hasattr(item, 'type') and item.type == 'message':
+                        if hasattr(item, 'content') and len(item.content) > 0:
+                            first_content = item.content[0]
+                            if hasattr(first_content, 'text'):
+                                content = first_content.text
+                                break
             
             logger.info(f"Vision model raw response: {content[:500] if content else 'None'}")
             
