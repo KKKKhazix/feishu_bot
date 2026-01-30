@@ -73,8 +73,8 @@ class VolcanoAI:
             api_key=api_key,
             base_url="https://ark.cn-beijing.volces.com/api/v3"
         )
-        # 使用豆包1.6 lite（支持图片，可关闭深度推理）
-        self.vision_model = "doubao-seed-1-6-lite"
+        # 使用豆包1.8（多模态Agent优化，支持关闭深度思考）
+        self.vision_model = "doubao-seed-1-8-251228"
         
         # 火山引擎原生服务凭证（如果配置了的话）
         self.access_key = access_key
@@ -99,7 +99,7 @@ class VolcanoAI:
             today = datetime.now().strftime("%Y年%m月%d日 %A")
             prompt = VISION_SCHEDULE_PROMPT.format(today=today)
             
-            # 使用标准 chat.completions API（非思考模型）
+            # 使用标准 chat.completions API，关闭深度思考
             response = self.client.chat.completions.create(
                 model=self.vision_model,
                 messages=[
@@ -119,7 +119,13 @@ class VolcanoAI:
                         ]
                     }
                 ],
-                max_tokens=1000
+                max_tokens=1000,
+                # 关闭深度思考，直接输出结果
+                extra_body={
+                    "thinking": {
+                        "type": "disabled"
+                    }
+                }
             )
             
             # 获取响应内容（标准格式）
