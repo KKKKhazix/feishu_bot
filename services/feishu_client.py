@@ -272,3 +272,187 @@ class FeishuClient:
         
         logger.info(f"Schedule card sent successfully for: {title}")
         return True
+
+    def create_calendar_event(
+        self,
+        user_open_id: str,
+        title: str,
+        start_time: datetime,
+        end_time: datetime,
+        location: Optional[str] = None,
+        description: Optional[str] = None
+    ) -> Tuple[bool, Optional[str]]:
+        """使用日历 API 创建日程
+        
+        Args:
+            user_open_id: 用户的 open_id（用于获取主日历）
+            title: 日程标题
+            start_time: 开始时间
+            end_time: 结束时间
+            location: 地点（可选）
+            description: 描述（可选）
+            
+        Returns:
+            (是否成功, 日程event_id或错误信息)
+        """
+        try:
+            # 如果datetime是naive的（没有时区信息），假设它是北京时间
+            if start_time.tzinfo is None:
+                start_time_aware = start_time.replace(tzinfo=BEIJING_TZ)
+            else:
+                start_time_aware = start_time
+                
+            if end_time.tzinfo is None:
+                end_time_aware = end_time.replace(tzinfo=BEIJING_TZ)
+            else:
+                end_time_aware = end_time
+            
+            # 转换为时间戳字符串（秒）
+            start_ts = str(int(start_time_aware.timestamp()))
+            end_ts = str(int(end_time_aware.timestamp()))
+            
+            # 构建日程事件
+            event_builder = CalendarEvent.builder() \
+                .summary(title) \
+                .start_time(TimeInfo.builder()
+                    .timestamp(start_ts)
+                    .timezone("Asia/Shanghai")
+                    .build()) \
+                .end_time(TimeInfo.builder()
+                    .timestamp(end_ts)
+                    .timezone("Asia/Shanghai")
+                    .build())
+            
+            # 添加地点
+            if location:
+                event_builder = event_builder.location(
+                    EventLocation.builder()
+                        .name(location)
+                        .build()
+                )
+            
+            # 添加描述
+            if description:
+                event_builder = event_builder.description(description)
+            
+            event = event_builder.build()
+            
+            # 使用主日历创建日程（calendar_id = "primary"）
+            request = CreateCalendarEventRequest.builder() \
+                .calendar_id("primary") \
+                .user_id_type("open_id") \
+                .request_body(event) \
+                .build()
+            
+            # 使用用户身份调用（需要 user_access_token）
+            # 但我们这里用应用身份，创建到用户的主日历
+            response = self.client.calendar.v4.calendar_event.create(request)
+            
+            if not response.success():
+                error_msg = f"code: {response.code}, msg: {response.msg}"
+                logger.error(f"Create calendar event failed: {error_msg}")
+                return (False, error_msg)
+            
+            event_id = response.data.event.event_id if response.data and response.data.event else None
+            logger.info(f"Calendar event created successfully: {title}, event_id: {event_id}")
+            return (True, event_id)
+            
+        except Exception as e:
+            logger.error(f"Create calendar event error: {e}", exc_info=True)
+            return (False, str(e))
+
+    def reply_schedule_created_card(
+        self, 
+        message_id: str, 
+        title: str, 
+        start_time: datetime,
+        end_time: datetime,
+        location: Optional[str] = None,
+        source: str = "消息"
+    ) -> bool:
+        """回复日程创建成功的卡片
+        
+        Args:
+            message_id: 要回复的消息ID
+            title: 日程标题
+            start_time: 开始时间
+            end_time: 结束时间
+            location: 地点（可选）
+            source: 来源描述（如"图片"、"文字"）
+            
+        Returns:
+            是否发送成功
+        """
+        # 格式化时间显示
+        start_str = start_time.strftime('%Y-%m-%d %H:%M')
+        end_str = end_time.strftime('%H:%M')
+        
+        # 构建卡片元素
+        elements = [
+            {
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": f"**📅 {title}**"
+                }
+            },
+            {
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": f"🕐 **时间**: {start_str} - {end_str}"
+                }
+            }
+        ]
+        
+        # 如果有地点，添加地点信息
+        if location:
+            elements.append({
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": f"📍 **地点**: {location}"
+                }
+            })
+        
+        # 添加提示
+        elements.append({
+            "tag": "note",
+            "elements": [
+                {
+                    "tag": "plain_text",
+                    "content": f"从{source}中识别并自动添加到您的日历"
+                }
+            ]
+        })
+        
+        card = {
+            "config": {
+                "wide_screen_mode": True
+            },
+            "header": {
+                "template": "green",
+                "title": {
+                    "tag": "plain_text",
+                    "content": "✅ 已添加到日历"
+                }
+            },
+            "elements": elements
+        }
+        
+        request = ReplyMessageRequest.builder() \
+            .message_id(message_id) \
+            .request_body(ReplyMessageRequestBody.builder() \
+                .msg_type("interactive") \
+                .content(json.dumps(card)) \
+                .build()) \
+            .build()
+            
+        response = self.client.im.v1.message.reply(request)
+        
+        if not response.success():
+            logger.error(f"Reply card failed, code: {response.code}, msg: {response.msg}")
+            return False
+        
+        logger.info(f"Schedule created card sent for: {title}")
+        return True

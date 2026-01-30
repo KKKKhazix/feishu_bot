@@ -82,15 +82,41 @@ class VoiceHandler:
             else:
                 end_dt = start_dt + timedelta(hours=1)
             
-            # 发送日程卡片（带「添加到日历」按钮）
-            self.feishu.reply_schedule_card(
-                message_id=message_id,
+            # 获取用户 open_id
+            sender = event.get("sender", {})
+            sender_id = sender.get("sender_id", {})
+            user_open_id = sender_id.get("open_id", "")
+            
+            # 使用 API 创建日程
+            success, result = self.feishu.create_calendar_event(
+                user_open_id=user_open_id,
                 title=title,
                 start_time=start_dt,
                 end_time=end_dt,
-                location=location,
-                source="语音"
+                location=location
             )
+            
+            if success:
+                # 发送成功通知卡片
+                self.feishu.reply_schedule_created_card(
+                    message_id=message_id,
+                    title=title,
+                    start_time=start_dt,
+                    end_time=end_dt,
+                    location=location,
+                    source="语音"
+                )
+            else:
+                # 创建失败，降级为发送带按钮的卡片让用户手动添加
+                logger.warning(f"API create failed: {result}, falling back to AppLink")
+                self.feishu.reply_schedule_card(
+                    message_id=message_id,
+                    title=title,
+                    start_time=start_dt,
+                    end_time=end_dt,
+                    location=location,
+                    source="语音"
+                )
                 
         except Exception as e:
             logger.error(f"Voice handler error: {e}", exc_info=True)
