@@ -73,8 +73,8 @@ class VolcanoAI:
             api_key=api_key,
             base_url="https://ark.cn-beijing.volces.com/api/v3"
         )
-        # 使用支持图片理解的 flash 模型
-        self.vision_model = "doubao-seed-1-6-flash-250828"
+        # 使用非思考版视觉模型（直接输出结果，不返回推理过程）
+        self.vision_model = "doubao-1.5-pro-vision"
         
         # 火山引擎原生服务凭证（如果配置了的话）
         self.access_key = access_key
@@ -99,39 +99,31 @@ class VolcanoAI:
             today = datetime.now().strftime("%Y年%m月%d日 %A")
             prompt = VISION_SCHEDULE_PROMPT.format(today=today)
             
-            # 使用官方推荐的 responses.create API
-            response = self.client.responses.create(
+            # 使用标准 chat.completions API（非思考模型）
+            response = self.client.chat.completions.create(
                 model=self.vision_model,
-                input=[
+                messages=[
                     {
                         "role": "user",
                         "content": [
                             {
-                                "type": "input_image",
-                                "image_url": f"data:image/png;base64,{image_base64}"
+                                "type": "text",
+                                "text": prompt
                             },
                             {
-                                "type": "input_text",
-                                "text": prompt
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{image_base64}"
+                                }
                             }
                         ]
                     }
-                ]
+                ],
+                max_tokens=1000
             )
             
-            # 获取响应内容
-            # response.output 是一个 list，包含 reasoning 和 message
-            # 我们需要找到 type='message' 的元素，取其 content[0].text
-            content = None
-            if hasattr(response, 'output') and isinstance(response.output, list):
-                for item in response.output:
-                    # 找到 message 类型的输出
-                    if hasattr(item, 'type') and item.type == 'message':
-                        if hasattr(item, 'content') and len(item.content) > 0:
-                            first_content = item.content[0]
-                            if hasattr(first_content, 'text'):
-                                content = first_content.text
-                                break
+            # 获取响应内容（标准格式）
+            content = response.choices[0].message.content
             
             logger.info(f"Vision model raw response: {content[:500] if content else 'None'}")
             
