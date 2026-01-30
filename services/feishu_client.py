@@ -516,38 +516,6 @@ class FeishuClient:
         # 添加分割线
         elements.append({"tag": "hr"})
         
-        # 添加「查看详情」按钮
-        if calendar_id and event_id:
-            # 转换为秒级时间戳
-            if start_time.tzinfo is None:
-                start_time_aware = start_time.replace(tzinfo=BEIJING_TZ)
-            else:
-                start_time_aware = start_time
-            if end_time.tzinfo is None:
-                end_time_aware = end_time.replace(tzinfo=BEIJING_TZ)
-            else:
-                end_time_aware = end_time
-            
-            start_ts = int(start_time_aware.timestamp())
-            end_ts = int(end_time_aware.timestamp())
-            
-            detail_url = f"https://applink.feishu.cn/client/calendar/event/detail?calendarId={quote(calendar_id)}&eventKey={quote(event_id)}&startTime={start_ts}&endTime={end_ts}"
-            
-            elements.append({
-                "tag": "action",
-                "actions": [
-                    {
-                        "tag": "button",
-                        "text": {
-                            "tag": "plain_text",
-                            "content": "📅 查看日程详情"
-                        },
-                        "type": "primary",
-                        "url": detail_url
-                    }
-                ]
-            })
-        
         # 添加提示
         elements.append({
             "tag": "note",
