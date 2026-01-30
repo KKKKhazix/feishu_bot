@@ -321,7 +321,7 @@ class FeishuClient:
         end_time: datetime,
         location: Optional[str] = None,
         description: Optional[str] = None
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
         """使用日历 API 创建日程
         
         Args:
@@ -438,7 +438,7 @@ class FeishuClient:
                 .user_id_type("open_id") \
                 .request_body(CreateCalendarEventAttendeeRequestBody.builder()
                     .attendees([attendee])
-                    .need_notification(False)  # 不发通知，避免重复（创建日程时已通知）
+                    .need_notification(True)  # 给用户发通知
                     .build()) \
                 .build()
             
@@ -516,8 +516,37 @@ class FeishuClient:
         # 添加分割线
         elements.append({"tag": "hr"})
         
-        # 注：不添加「查看详情」按钮，因为 AppLink 对应用日历的日程无法正常打开
-        # 用户可以从「日历助手」的通知中直接进入日程详情
+        # 添加「查看详情」按钮
+        if calendar_id and event_id:
+            # 转换为秒级时间戳
+            if start_time.tzinfo is None:
+                start_time_aware = start_time.replace(tzinfo=BEIJING_TZ)
+            else:
+                start_time_aware = start_time
+            if end_time.tzinfo is None:
+                end_time_aware = end_time.replace(tzinfo=BEIJING_TZ)
+            else:
+                end_time_aware = end_time
+            
+            start_ts = int(start_time_aware.timestamp())
+            end_ts = int(end_time_aware.timestamp())
+            
+            detail_url = f"https://applink.feishu.cn/client/calendar/event/detail?calendarId={quote(calendar_id)}&eventKey={quote(event_id)}&startTime={start_ts}&endTime={end_ts}"
+            
+            elements.append({
+                "tag": "action",
+                "actions": [
+                    {
+                        "tag": "button",
+                        "text": {
+                            "tag": "plain_text",
+                            "content": "📅 查看日程详情"
+                        },
+                        "type": "primary",
+                        "url": detail_url
+                    }
+                ]
+            })
         
         # 添加提示
         elements.append({
