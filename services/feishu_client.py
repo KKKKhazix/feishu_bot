@@ -273,6 +273,46 @@ class FeishuClient:
         logger.info(f"Schedule card sent successfully for: {title}")
         return True
 
+    def get_user_primary_calendar_id(self, user_open_id: str) -> Optional[str]:
+        """获取用户的主日历 ID
+        
+        Args:
+            user_open_id: 用户的 open_id
+            
+        Returns:
+            日历ID，失败返回None
+        """
+        try:
+            # 获取用户的主日历信息
+            # 使用 CalendarListRequest 获取日历列表
+            request = ListCalendarRequest.builder() \
+                .page_size(50) \
+                .build()
+            
+            response = self.client.calendar.v4.calendar.list(request)
+            
+            if not response.success():
+                logger.error(f"Get calendar list failed: {response.code}, {response.msg}")
+                return None
+            
+            if response.data and response.data.calendar_list:
+                # 查找主日历（类型为 primary 或第一个自己的日历）
+                for cal in response.data.calendar_list:
+                    # 返回第一个日历的 ID
+                    calendar_id = cal.calendar_id
+                    logger.info(f"Got calendar: {calendar_id}, type: {cal.type}")
+                    if cal.type == "primary":
+                        return calendar_id
+                # 如果没有 primary，返回第一个
+                if response.data.calendar_list:
+                    return response.data.calendar_list[0].calendar_id
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Get calendar list error: {e}", exc_info=True)
+            return None
+
     def create_calendar_event(
         self,
         user_open_id: str,
@@ -337,15 +377,21 @@ class FeishuClient:
             
             event = event_builder.build()
             
-            # 使用主日历创建日程（calendar_id = "primary"）
+            # 先获取用户的主日历 ID
+            # 注意：使用 tenant_access_token 时，不能直接用 "primary"
+            # 需要先查询用户的日历列表获取真实的 calendar_id
+            calendar_id = self.get_user_primary_calendar_id(user_open_id)
+            if not calendar_id:
+                # 如果无法获取用户日历，尝试使用共享日历或返回错误
+                logger.warning(f"Cannot get user calendar for {user_open_id}, trying primary")
+                calendar_id = "primary"  # 降级尝试
+            
             request = CreateCalendarEventRequest.builder() \
-                .calendar_id("primary") \
+                .calendar_id(calendar_id) \
                 .user_id_type("open_id") \
                 .request_body(event) \
                 .build()
             
-            # 使用用户身份调用（需要 user_access_token）
-            # 但我们这里用应用身份，创建到用户的主日历
             response = self.client.calendar.v4.calendar_event.create(request)
             
             if not response.success():
