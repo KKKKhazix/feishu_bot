@@ -1,6 +1,6 @@
 """飞书客户端封装"""
 import json
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Tuple
 from urllib.parse import quote
 import lark_oapi as lark
@@ -8,6 +8,9 @@ from lark_oapi.api.im.v1 import *
 from lark_oapi.api.calendar.v4 import *
 
 from utils.logger import get_logger
+
+# 北京时区 UTC+8
+BEIJING_TZ = timezone(timedelta(hours=8))
 
 logger = get_logger(__name__)
 
@@ -134,8 +137,24 @@ class FeishuClient:
         """
         # 构建飞书日程创建链接
         # URL格式: https://applink.feishu.cn/client/calendar/event/create?start_time=时间戳&end_time=时间戳&summary=标题
-        start_ts = int(start_time.timestamp())
-        end_ts = int(end_time.timestamp())
+        # 注意：飞书applink需要UTC时间戳（秒），传入的datetime是北京时间，需要转换
+        
+        # 如果datetime是naive的（没有时区信息），假设它是北京时间
+        if start_time.tzinfo is None:
+            start_time_aware = start_time.replace(tzinfo=BEIJING_TZ)
+        else:
+            start_time_aware = start_time
+            
+        if end_time.tzinfo is None:
+            end_time_aware = end_time.replace(tzinfo=BEIJING_TZ)
+        else:
+            end_time_aware = end_time
+        
+        # 转换为UTC时间戳（秒）
+        start_ts = int(start_time_aware.timestamp())
+        end_ts = int(end_time_aware.timestamp())
+        
+        logger.debug(f"Calendar link timestamps: start={start_ts}, end={end_ts}")
         
         calendar_url = f"https://applink.feishu.cn/client/calendar/event/create?start_time={start_ts}&end_time={end_ts}&summary={quote(title)}"
         if location:
