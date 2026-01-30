@@ -150,28 +150,25 @@ class FeishuClient:
         else:
             end_time_aware = end_time
         
-        # 转换为UTC时间戳（秒/毫秒）
+        # 转换为UTC时间戳（秒）
+        # 注意：飞书 AppLink 只接受秒级时间戳，不能传毫秒！
         start_ts = int(start_time_aware.timestamp())
         end_ts = int(end_time_aware.timestamp())
-        start_ts_ms = int(start_time_aware.timestamp() * 1000)
-        end_ts_ms = int(end_time_aware.timestamp() * 1000)
         
         logger.debug(f"Calendar link timestamps: start={start_ts}, end={end_ts}")
         
+        # 飞书 AppLink 参数：
+        # - startTime/endTime: 秒级时间戳（驼峰命名，iOS客户端用这个）
+        # - summary: 标题
+        # - location: 地点
         params = [
-            ("start_time", str(start_ts)),
-            ("end_time", str(end_ts)),
-            ("startTime", str(start_ts_ms)),
-            ("endTime", str(end_ts_ms)),
+            ("startTime", str(start_ts)),
+            ("endTime", str(end_ts)),
             ("summary", title),
-            ("title", title),
         ]
 
         if location:
-            params.extend([
-                ("location", location),
-                ("address", location),
-            ])
+            params.append(("location", location))
 
         query = urlencode(params, quote_via=quote)
         calendar_url = f"https://applink.feishu.cn/client/calendar/event/create?{query}"
