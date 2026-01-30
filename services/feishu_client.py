@@ -351,6 +351,11 @@ class FeishuClient:
             start_ts = str(int(start_time_aware.timestamp()))
             end_ts = str(int(end_time_aware.timestamp()))
             
+            # 构建参与人权限设置（允许参与人编辑日程）
+            attendee_ability = AttendeeAbility.builder() \
+                .can_modify_event(True) \
+                .build()
+            
             # 构建日程事件
             event_builder = CalendarEvent.builder() \
                 .summary(title) \
@@ -361,7 +366,8 @@ class FeishuClient:
                 .end_time(TimeInfo.builder()
                     .timestamp(end_ts)
                     .timezone("Asia/Shanghai")
-                    .build())
+                    .build()) \
+                .attendee_ability(attendee_ability)
             
             # 添加地点
             if location:
