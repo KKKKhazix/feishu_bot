@@ -167,10 +167,12 @@ class FeishuClient:
             ("summary", title),
         ]
 
-        # 地点信息：尝试用 location 和 description 双保险
+        # 地点信息：放到描述里（飞书AppLink的location参数不一定生效）
+        # 尝试多种可能的参数名
         if location:
-            params.append(("location", location))
-            params.append(("description", f"地点: {location}"))
+            desc_text = f"📍 地点: {location}"
+            params.append(("description", desc_text))  # 标准参数名
+            params.append(("desc", desc_text))          # 简写参数名
 
         query = urlencode(params, quote_via=quote)
         calendar_url = f"https://applink.feishu.cn/client/calendar/event/create?{query}"
