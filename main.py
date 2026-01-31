@@ -1,5 +1,6 @@
 """飞书日程机器人 - 主入口"""
 import json
+import time
 from typing import Optional
 import lark_oapi as lark
 from lark_oapi.api.im.v1 import P2ImMessageReceiveV1
@@ -23,6 +24,11 @@ doubao_llm: Optional[DoubaoLLM] = None
 text_handler: Optional[TextHandler] = None
 image_handler: Optional[ImageHandler] = None
 voice_handler: Optional[VoiceHandler] = None
+
+# 消息去重：存储已处理的消息ID和时间戳
+processed_messages: dict[str, float] = {}
+MESSAGE_DEDUP_WINDOW = 60 * 60  # 1小时内的重复消息会被忽略
+MAX_PROCESSED_MESSAGES = 2000
 
 
 def init_services():
@@ -53,12 +59,26 @@ def init_services():
     logger.info("All services initialized")
 
 
+def cleanup_old_messages():
+    """清理过期的消息记录，防止内存泄漏"""
+    global processed_messages
+    current_time = time.time()
+    expired_keys = [
+        msg_id for msg_id, timestamp in processed_messages.items()
+        if current_time - timestamp > MESSAGE_DEDUP_WINDOW
+    ]
+    for key in expired_keys:
+        del processed_messages[key]
+
+
 def handle_message_event(data: P2ImMessageReceiveV1):
     """处理消息接收事件
     
     Args:
         data: 飞书消息事件数据
     """
+    global processed_messages
+    
     try:
         if not all([text_handler, image_handler, voice_handler, feishu_client]):
             logger.error("Services not initialized")
@@ -67,8 +87,22 @@ def handle_message_event(data: P2ImMessageReceiveV1):
         event = data.event
         message = event.message
         message_type = message.message_type
+        message_id = message.message_id
         
-        logger.info(f"Received message: type={message_type}, id={message.message_id}")
+        # 消息去重检查
+        current_time = time.time()
+        if message_id in processed_messages:
+            logger.warning(f"Duplicate message ignored: {message_id}")
+            return
+        
+        # 标记消息已处理
+        processed_messages[message_id] = current_time
+        
+        # 定期清理过期记录
+        if len(processed_messages) > MAX_PROCESSED_MESSAGES:
+            cleanup_old_messages()
+        
+        logger.info(f"Received message: type={message_type}, id={message_id}")
         
         # 构建事件数据字典，保持与 Handler 中期待的结构一致
         event_dict = {
