@@ -1,11 +1,12 @@
 """飞书日程机器人 - 主入口"""
 import json
-import time
+import os
 from typing import Optional
 import lark_oapi as lark
 from lark_oapi.api.im.v1 import P2ImMessageReceiveV1
 
 from utils.config import Config
+from utils.dedup_store import DedupStore
 from utils.logger import get_logger
 from services.feishu_client import FeishuClient
 from services.volcano_ai import VolcanoAI
@@ -25,15 +26,15 @@ text_handler: Optional[TextHandler] = None
 image_handler: Optional[ImageHandler] = None
 voice_handler: Optional[VoiceHandler] = None
 
-# 消息去重：存储已处理的消息ID和时间戳
-processed_messages: dict[str, float] = {}
-MESSAGE_DEDUP_WINDOW = 60 * 60  # 1小时内的重复消息会被忽略
-MAX_PROCESSED_MESSAGES = 2000
+dedup_store: Optional[DedupStore] = None
+MESSAGE_DEDUP_WINDOW = 7 * 24 * 60 * 60
+DEDUP_CLEANUP_INTERVAL = 60 * 60
+DEDUP_DB_PATH = os.path.join(os.path.dirname(__file__), "data", "dedup.db")
 
 
 def init_services():
     """初始化所有服务"""
-    global config, feishu_client, volcano_ai, doubao_llm
+    global config, feishu_client, volcano_ai, doubao_llm, dedup_store
     global text_handler, image_handler, voice_handler
     
     logger.info("Initializing services...")
@@ -55,20 +56,14 @@ def init_services():
     text_handler = TextHandler(feishu_client, doubao_llm)
     image_handler = ImageHandler(feishu_client, volcano_ai, doubao_llm)
     voice_handler = VoiceHandler(feishu_client, volcano_ai, doubao_llm)
+
+    dedup_store = DedupStore(
+        db_path=DEDUP_DB_PATH,
+        window_seconds=MESSAGE_DEDUP_WINDOW,
+        cleanup_interval_seconds=DEDUP_CLEANUP_INTERVAL
+    )
     
     logger.info("All services initialized")
-
-
-def cleanup_old_messages():
-    """清理过期的消息记录，防止内存泄漏"""
-    global processed_messages
-    current_time = time.time()
-    expired_keys = [
-        msg_id for msg_id, timestamp in processed_messages.items()
-        if current_time - timestamp > MESSAGE_DEDUP_WINDOW
-    ]
-    for key in expired_keys:
-        del processed_messages[key]
 
 
 def handle_message_event(data: P2ImMessageReceiveV1):
@@ -77,7 +72,7 @@ def handle_message_event(data: P2ImMessageReceiveV1):
     Args:
         data: 飞书消息事件数据
     """
-    global processed_messages
+    global dedup_store
     
     try:
         if not all([text_handler, image_handler, voice_handler, feishu_client]):
@@ -85,37 +80,41 @@ def handle_message_event(data: P2ImMessageReceiveV1):
             return
 
         event = data.event
+        if event is None:
+            logger.warning("Empty event, ignored")
+            return
+        if event.message is None:
+            logger.warning("Empty event message, ignored")
+            return
+
         message = event.message
         message_type = message.message_type
         message_id = message.message_id
-        
-        # 消息去重检查
-        current_time = time.time()
-        if message_id in processed_messages:
-            logger.warning(f"Duplicate message ignored: {message_id}")
+        if message_id is None or message_id == "":
+            logger.warning("Empty message_id, ignored")
             return
         
-        # 标记消息已处理
-        processed_messages[message_id] = current_time
-        
-        # 定期清理过期记录
-        if len(processed_messages) > MAX_PROCESSED_MESSAGES:
-            cleanup_old_messages()
+        # 消息去重检查
+        if dedup_store and dedup_store.is_duplicate(message_id):
+            logger.warning(f"Duplicate message ignored: {message_id}")
+            return
         
         logger.info(f"Received message: type={message_type}, id={message_id}")
         
         # 构建事件数据字典，保持与 Handler 中期待的结构一致
+        sender = event.sender
+        sender_id = sender.sender_id if sender and sender.sender_id else None
         event_dict = {
             "message": {
-                "message_id": message.message_id,
+                "message_id": message_id,
                 "chat_id": message.chat_id,
                 "message_type": message_type,
                 "content": message.content,
             },
             "sender": {
                 "sender_id": {
-                    "open_id": event.sender.sender_id.open_id if event.sender.sender_id else "",
-                    "user_id": event.sender.sender_id.user_id if event.sender.sender_id else "",
+                    "open_id": sender_id.open_id if sender_id else "",
+                    "user_id": sender_id.user_id if sender_id else "",
                 }
             }
         }
@@ -132,7 +131,7 @@ def handle_message_event(data: P2ImMessageReceiveV1):
             # 回复用户提示不支持的消息类型
             if feishu_client:
                 feishu_client.reply_message(
-                    message.message_id,
+                    message_id,
                     f"暂不支持该消息类型 ({message_type})\n\n"
                     "请发送：\n"
                     "📝 文字消息\n"
