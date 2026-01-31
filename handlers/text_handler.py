@@ -88,6 +88,16 @@ class TextHandler:
                     calendar_id=calendar_id,
                     event_id=event_id
                 )
+            elif calendar_id == "duplicate":
+                # 日程已存在
+                logger.info(f"Duplicate event detected: {title}")
+                self.feishu.reply_message(
+                    message_id,
+                    f"✅ 该日程已存在\n\n"
+                    f"📅 {title}\n"
+                    f"🕐 {start_dt.strftime('%Y-%m-%d %H:%M')}\n\n"
+                    "无需重复创建"
+                )
             else:
                 # 创建失败，降级为发送带按钮的卡片让用户手动添加
                 logger.warning(f"API create failed: {event_id}, falling back to AppLink")

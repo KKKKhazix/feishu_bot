@@ -1,7 +1,7 @@
 """飞书客户端封装"""
 import json
 from datetime import datetime, timezone, timedelta
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Any
 from urllib.parse import quote, urlencode
 import lark_oapi as lark
 from lark_oapi.api.im.v1 import *
@@ -17,6 +17,9 @@ logger = get_logger(__name__)
 
 class FeishuClient:
     """飞书API客户端封装"""
+    client: lark.Client
+    app_id: str
+    app_secret: str
     
     def __init__(self, app_id: str, app_secret: str):
         """初始化客户端
@@ -168,7 +171,6 @@ class FeishuClient:
         ]
 
         # 地点信息：尝试多种参数格式（优先地点字段，备选描述字段）
-        # 根据飞书SDK分析，location可能需要用点号分隔格式
         if location:
             # 方案1：点号分隔格式（最可能生效）
             params.append(("location.name", location))
@@ -185,7 +187,7 @@ class FeishuClient:
         end_str = end_time.strftime('%H:%M')
         
         # 构建卡片元素
-        elements = [
+        elements: list[dict[str, Any]] = [
             {
                 "tag": "div",
                 "text": {
@@ -313,6 +315,67 @@ class FeishuClient:
             logger.error(f"Get calendar list error: {e}", exc_info=True)
             return None
 
+    def check_duplicate_event(
+        self,
+        calendar_id: str,
+        title: str,
+        start_time: datetime
+    ) -> Tuple[bool, Optional[str]]:
+        """检查是否已存在相同的日程
+        
+        Args:
+            calendar_id: 日历ID
+            title: 日程标题
+            start_time: 开始时间
+            
+        Returns:
+            (是否重复, 已存在的event_id或None)
+        """
+        try:
+            # 如果datetime是naive的（没有时区信息），假设它是北京时间
+            if start_time.tzinfo is None:
+                start_time_aware = start_time.replace(tzinfo=BEIJING_TZ)
+            else:
+                start_time_aware = start_time
+            
+            # 查询 ±1 天范围内的日程
+            query_start = start_time_aware - timedelta(days=1)
+            query_end = start_time_aware + timedelta(days=1)
+            
+            query_start_ts = str(int(query_start.timestamp()))
+            query_end_ts = str(int(query_end.timestamp()))
+            
+            # 查询日程列表
+            request = ListCalendarEventRequest.builder() \
+                .calendar_id(calendar_id) \
+                .start_time(query_start_ts) \
+                .end_time(query_end_ts) \
+                .page_size(100) \
+                .build()
+            
+            response = self.client.calendar.v4.calendar_event.list(request)
+            
+            if not response.success():
+                logger.error(f"Query calendar events failed: {response.code}, {response.msg}")
+                return (False, None)
+            
+            # 检查是否有匹配的日程
+            if response.data and response.data.items:
+                target_ts = str(int(start_time_aware.timestamp()))
+                for event in response.data.items:
+                    # 检查标题和开始时间是否完全匹配
+                    if (event.summary == title and 
+                        event.start_time and 
+                        event.start_time.timestamp == target_ts):
+                        logger.info(f"Found duplicate event: {event.event_id}, title: {title}")
+                        return (True, event.event_id)
+            
+            return (False, None)
+            
+        except Exception as e:
+            logger.error(f"Check duplicate event error: {e}", exc_info=True)
+            return (False, None)
+
     def create_calendar_event(
         self,
         user_open_id: str,
@@ -333,10 +396,24 @@ class FeishuClient:
             description: 描述（可选）
             
         Returns:
-            (是否成功, 日程event_id或错误信息)
+            (是否成功, 日程calendar_id或错误信息, 日程event_id或错误详情)
         """
         try:
-            # 如果datetime是naive的（没有时区信息），假设它是北京时间
+            # 1. 获取用户的主日历 ID
+            calendar_id = self.get_user_primary_calendar_id(user_open_id)
+            if not calendar_id:
+                logger.warning(f"Cannot get user calendar for {user_open_id}, trying primary")
+                calendar_id = "primary"  # 降级尝试
+            
+            # 2. 检查是否已存在相同日程 (BEFORE event builder)
+            is_duplicate, existing_event_id = self.check_duplicate_event(
+                calendar_id, title, start_time
+            )
+            if is_duplicate:
+                logger.info(f"Event already exists: {title}, event_id: {existing_event_id}")
+                return (False, "duplicate", existing_event_id)
+
+            # 3. 时间处理
             if start_time.tzinfo is None:
                 start_time_aware = start_time.replace(tzinfo=BEIJING_TZ)
             else:
@@ -347,11 +424,10 @@ class FeishuClient:
             else:
                 end_time_aware = end_time
             
-            # 转换为时间戳字符串（秒）
             start_ts = str(int(start_time_aware.timestamp()))
             end_ts = str(int(end_time_aware.timestamp()))
             
-            # 构建日程事件
+            # 4. 构建日程事件
             event_builder = CalendarEvent.builder() \
                 .summary(title) \
                 .start_time(TimeInfo.builder()
@@ -378,15 +454,7 @@ class FeishuClient:
             
             event = event_builder.build()
             
-            # 先获取用户的主日历 ID
-            # 注意：使用 tenant_access_token 时，不能直接用 "primary"
-            # 需要先查询用户的日历列表获取真实的 calendar_id
-            calendar_id = self.get_user_primary_calendar_id(user_open_id)
-            if not calendar_id:
-                # 如果无法获取用户日历，尝试使用共享日历或返回错误
-                logger.warning(f"Cannot get user calendar for {user_open_id}, trying primary")
-                calendar_id = "primary"  # 降级尝试
-            
+            # 5. 调用接口创建
             request = CreateCalendarEventRequest.builder() \
                 .calendar_id(calendar_id) \
                 .user_id_type("open_id") \
@@ -398,17 +466,16 @@ class FeishuClient:
             if not response.success():
                 error_msg = f"code: {response.code}, msg: {response.msg}"
                 logger.error(f"Create calendar event failed: {error_msg}")
-                return (False, error_msg)
+                return (False, error_msg, None)  # Fixed return format
             
             event_id = response.data.event.event_id if response.data and response.data.event else None
             logger.info(f"Calendar event created successfully: {title}, event_id: {event_id}")
             
             # 创建成功后，将用户添加为日程参与人
-            # 这样日程才会出现在用户的日历中
             if event_id and user_open_id:
                 self._add_event_attendee(calendar_id, event_id, user_open_id)
             
-            # 返回 (成功, calendar_id, event_id) 用于生成详情链接
+            # 返回 (成功, calendar_id, event_id)
             return (True, calendar_id, event_id)
             
         except Exception as e:
@@ -487,7 +554,7 @@ class FeishuClient:
         end_str = end_time.strftime('%H:%M')
         
         # 构建卡片元素
-        elements = [
+        elements: list[dict[str, Any]] = [
             {
                 "tag": "div",
                 "text": {
