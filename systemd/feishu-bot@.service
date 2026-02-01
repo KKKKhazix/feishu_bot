@@ -1,17 +1,17 @@
 [Unit]
-Description=Feishu Calendar Bot - 飞书日程机器人
+Description=Feishu Bot (%i)
 After=network.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/root/feishu_bot
-ExecStart=/root/feishu_bot/.venv/bin/python main.py
+WorkingDirectory=/root/feishu_bot/apps/%i
+EnvironmentFile=-/root/feishu_bot/apps/%i/.env
+ExecStart=/root/feishu_bot/apps/%i/.venv/bin/python main.py
 Restart=always
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1
 
-# 日志
 StandardOutput=journal
 StandardError=journal
 
